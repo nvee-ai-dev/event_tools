@@ -20,8 +20,11 @@ from pathlib import Path
 config = dotenv_values(".env")
 
 app = Flask(__name__)
-CAPTURE_PATH = config["CAPTURE_PATH"] or ""
-CAPTURE_FILE = config["CAPTURE_FILE"] or "default.json"
+
+# File goes in the specified directory, and is the current datetime
+CAPTURE_PATH = config["CAPTURE_PATH"] or "events/"
+now = datetime.now()
+CAPTURE_FILE = now.strftime("%Y%m%d_%H%M%S")
 JSON_FILE = Path(CAPTURE_PATH) / CAPTURE_FILE
 
 file_lock = Lock()

@@ -5,11 +5,10 @@ A collection of tools to capture and replay HTTP events/traffic
 This is a Flask based app. If you direct POSTS at it, it will capture them and store them in a JSON file. They can be replayed in sequence and with the relative timing preserved. 
 
 To use:
-- configure the capture file and path in the .env filew, e.g.:
+- configure the capture path in the .env filew, e.g.:
 ```
 # .env contains settings and values used in the Event Tools project
 CAPTURE_PATH=events/
-CAPTURE_FILE=events-2025-10-22.json
 ```
 
 Then run the capture app
@@ -69,4 +68,21 @@ Endpoints:
 [12] Captured POST to /event
 127.0.0.1 - - [22/Oct/2025 17:20:17] "POST /event HTTP/1.1" 200 -
 ^C%                                                                                                  
+```
+
+## HTTP Replay (`http_replay.py`)
+Plays back an events JSON, and preserves the relative timing. The actual rate can be changed by adjusting a yiming multiplyer. The (re)player takes command line options:
+```sh
+poetry run python event_tools/http_replay.py --help
+Replay captured HTTP requests, preserve relative timing
+
+positional arguments:
+  target_url            Target base URL (default: http://localhost:3001)
+
+options:
+  -h, --help            show this help message and exit
+  -f FILE, --file FILE  Capture file to replay (default: captured_requests.json)
+  -s SPEED, --speed SPEED
+                        Speed multiplier (default: 1.0 = real-time, 2.0 = 2x faster, 0.5 = half
+                        speed)
 ```

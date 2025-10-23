@@ -6,3 +6,4 @@ poetry.lock
 .env
 /env.json
 events/*.json
+replay_results.json
