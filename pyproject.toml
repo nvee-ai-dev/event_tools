@@ -1,0 +1,24 @@
+[project]
+name = "event-tools"
+version = "0.1.0"
+description = "A collection of HTTP event capture and replay tools"
+authors = [
+    {name = "Ryan", email = "rhorman@nvee.ai"},
+    {name = "Martin", email = "mgibson@nvee.ai"}
+]
+license = "UNLICENSE"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest (>=8.4.2,<9.0.0)",
+    "flask (>=3.1.2,<4.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "event_tools"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
