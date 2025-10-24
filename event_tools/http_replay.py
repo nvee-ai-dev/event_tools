@@ -10,15 +10,16 @@ Description:
 """
 
 import requests
-import json
 import sys
 import time
 from datetime import datetime
+from event_tools.file_manager import FileManager
 
 
 def replay_sequence(
+    capture_dir="events",
     capture_file="captured_requests.json",
-    target_base_url="http://localhost:3001",
+    target_base_url="http://localhost:3000",
     speed_multiplier=1.0,
 ):
     """
@@ -29,11 +30,10 @@ def replay_sequence(
         target_base_url: Base URL to replay requests to
         speed_multiplier: Speed up (>1.0) or slow down (<1.0) replay. Default 1.0 = real-time
     """
+    jsonfile = FileManager(capture_dir, capture_file)
 
     # Load captured sequence
-    with open(capture_file) as f:
-        data = json.load(f)
-
+    data = jsonfile.load()
     events = data["events"]
 
     if not events:
@@ -167,23 +167,21 @@ def replay_sequence(
         f"  Average timing drift: {sum(abs(r.get('timing_drift', 0)) for r in results) / len(results):.3f}s"
     )
 
-    # Save results
-    results_file = "replay_results.json"
-    with open(results_file, "w") as f:
-        json.dump(
-            {
-                "original_session": data["session_start"],
-                "replay_timestamp": datetime.now().isoformat(),
-                "target_url": target_base_url,
-                "speed_multiplier": speed_multiplier,
-                "total_duration": total_duration,
-                "results": results,
-            },
-            f,
-            indent=2,
-        )
+    # Save results in the same directory
+    jsonfile = FileManager(capture_dir, "replay_results.json")
+    jsonfile.dump(
+        {
+            "original_session": data["session_start"],
+            "replay_timestamp": datetime.now().isoformat(),
+            "target_url": target_base_url,
+            "speed_multiplier": speed_multiplier,
+            "total_duration": total_duration,
+            "results": results,
+        },
+        indent=2,
+    )
 
-    print(f"\nResults saved to: {results_file}")
+    print(f"\nResults saved to: {str(jsonfile)}")
 
     return results
 
@@ -199,6 +197,12 @@ if __name__ == "__main__":
         nargs="?",
         default="http://localhost:3000",
         help="Target base URL (default: http://localhost:3001)",
+    )
+    parser.add_argument(
+        "-d",
+        "--dir",
+        default="events",
+        help="Directory in which captured requests are stored (default: events)",
     )
     parser.add_argument(
         "-f",
@@ -217,6 +221,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     replay_sequence(
+        capture_dir=args.dir,
         capture_file=args.file,
         target_base_url=args.target_url,
         speed_multiplier=args.speed,

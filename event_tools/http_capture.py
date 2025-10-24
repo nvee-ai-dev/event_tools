@@ -16,42 +16,72 @@ from datetime import datetime
 from threading import Lock
 from dotenv import dotenv_values
 from pathlib import Path
+from event_tools.file_manager import FileManager
+
 
 config = dotenv_values(".env")
 
 app = Flask(__name__)
 
 # File goes in the specified directory, and is the current datetime
-CAPTURE_PATH = config["CAPTURE_PATH"] or "events/"
+CAPTURE_PATH = config["CAPTURE_PATH"] or "./events"
 now = datetime.now()
-CAPTURE_FILE = now.strftime("%Y%m%d_%H%M%S")
-JSON_FILE = Path(CAPTURE_PATH) / CAPTURE_FILE
+CAPTURE_TIME = datetime.now().strftime("%Y%m%d_%H%M%S")
+JSON_FILE = FileManager(CAPTURE_PATH, f"{CAPTURE_TIME}.json")
+session_start = "Not started"
 
 file_lock = Lock()
 
+# Module scope events record and last write time
+# Constant define write frequency and max events to accumulate before writing.
+# This behaviour effectively emulates AWS FireHose behaviout
+MAX_TIME_BETWEEN_WRITES = 2  # seconds
+MAX_ACCUMULATED_EVENTS_BEFORE_WRITE = 1000
+events_list = []
+total_events = 0
+last_write_time = datetime.now()
 
-def initialize_capture_file():
+
+def initialize_capture():
     """Initialize the capture file if it doesn't exist"""
-    if not JSON_FILE:
-        with open(JSON_FILE, "w") as f:
-            json.dump(
-                {"session_start": datetime.now().isoformat(), "events": []}, f, indent=2
-            )
+    global total_events, last_write_time, session_start
+
+    events_list.clear()
+    total_events = 0
+    last_write_time = datetime.now()
+    session_start = last_write_time.isoformat()
+    with file_lock:
+        JSON_FILE.dump({"session_start": session_start, "events": []}, indent=2)
+
+
+def write_events() -> None:
+    global last_write_time
+
+    if (
+        len(events_list) >= MAX_ACCUMULATED_EVENTS_BEFORE_WRITE
+        or (datetime.now() - last_write_time).total_seconds() >= MAX_TIME_BETWEEN_WRITES
+    ):
+        with file_lock:
+            # Read existing data
+            data = JSON_FILE.load()
+
+            # Append new events
+            for event in events_list:
+                data["events"].append(event)
+
+            # Write back, zero the timer, empty the events list
+            JSON_FILE.dump(data, indent=2)
+            last_write_time = datetime.now()
+            events_list.clear()
 
 
 def append_event(event_data):
     """Append an event to the capture file"""
-    with file_lock:
-        # Read existing data
-        with open(JSON_FILE, "r") as f:
-            data = json.load(f)
+    global total_events
 
-        # Append new event
-        data["events"].append(event_data)
-
-        # Write back
-        with open(JSON_FILE, "w") as f:
-            json.dump(data, f, indent=2)
+    events_list.append(event_data)
+    total_events += 1
+    write_events()
 
 
 @app.route("/<path:path>", methods=["POST"])
@@ -60,7 +90,7 @@ def capture_all(path):
 
     # Capture request details
     captured = {
-        "sequence": len(get_all_events()) + 1,  # Event number in sequence
+        "sequence": total_events + 1,  # Event number in sequence
         "timestamp": timestamp,
         "path": "/" + path,
         "method": request.method,
@@ -80,49 +110,23 @@ def capture_all(path):
 @app.route("/capture/status", methods=["GET"])
 def get_status():
     """Get capture status"""
-    events = get_all_events()
     return {
-        "total_events": len(events),
+        "total_events": total_events,
         "json_file": JSON_FILE,
-        "session_start": get_session_start(),
+        "session_start": session_start,
     }, 200
 
 
 @app.route("/capture/reset", methods=["POST"])
 def reset_capture():
     """Reset/clear all captured events"""
-    with file_lock:
-        with open(JSON_FILE, "w") as f:
-            json.dump(
-                {"session_start": datetime.now().isoformat(), "events": []}, f, indent=2
-            )
-
+    initialize_capture()
     print("Capture file reset")
     return {"status": "reset", "message": "All captured events cleared"}, 200
 
 
-def get_all_events():
-    """Helper to get all events"""
-    try:
-        with open(JSON_FILE, "r") as f:
-            data = json.load(f)
-            return data.get("events", [])
-    except FileNotFoundError:
-        return []
-
-
-def get_session_start():
-    """Helper to get session start time"""
-    try:
-        with open(JSON_FILE, "r") as f:
-            data = json.load(f)
-            return data.get("session_start")
-    except FileNotFoundError:
-        return None
-
-
 if __name__ == "__main__":
-    initialize_capture_file()
+    initialize_capture()
     print(f"Capture server starting. Events will be saved to: {JSON_FILE}")
     print(f"Endpoints:")
     print(f"  - POST /<any-path>     : Capture request")
